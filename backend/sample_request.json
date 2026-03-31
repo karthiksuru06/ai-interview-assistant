@@ -1,0 +1,22 @@
+{
+    "question": "Tell me about a time you had a conflict with a coworker.",
+    "transcript": "So, um, basically I was working on this project and the frontend guy, Dave, he kept pushing code that broke my backend routes. I was really annoyed. I told him to stop it, but he didn't listen. Eventually I just fixed his code myself because we had a deadline. It worked out okay I guess, but I prefer working alone sometimes.",
+    "duration_seconds": 45.5,
+    "behavioral_metrics": {
+        "eye_contact_score": 62,
+        "facial_confidence_score": 58,
+        "emotional_stability": "average"
+    },
+    "speech_metrics": {
+        "wpm": 145,
+        "filler_words": 12,
+        "pauses_count": 4
+    },
+    "content_metrics": {
+        "star_method_detected": false,
+        "key_topics": [
+            "conflict",
+            "deadlines"
+        ]
+    }
+}

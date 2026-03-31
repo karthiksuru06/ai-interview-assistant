@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # ==================================
+  # BACKEND SERVICE (FastAPI + GPU)
+  # ==================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: interview-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount the verified models from host to container
+      - ./backend/models:/app/models
+      # Mount source code for live-reload updates
+      - ./backend/app:/app/app
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production}
+      - AI_SAFE_MODE=${AI_SAFE_MODE:-false}
+      - INFERENCE_DEVICE=${INFERENCE_DEVICE:-cpu}
+      - MONGODB_URI=${MONGODB_URI:-}
+      - USE_MONGODB=${USE_MONGODB:-true}
+    # Enable NVIDIA GPU Support (optional)
+    # Requires 'nvidia-container-toolkit' on host machine
+    # Uncomment the deploy block below if running on a GPU machine
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [ gpu ]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - interview-net
+
+  # ==================================
+  # FRONTEND SERVICE (React + Vite)
+  # ==================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:8000
+    container_name: interview-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - interview-net
+
+networks:
+  interview-net:
+    driver: bridge

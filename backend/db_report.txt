@@ -1,0 +1,16 @@
+DATABASE INSPECTION REPORT
+============================================================
+
+Total users in database: 1
+
+User Details:
+------------------------------------------------------------
+
+User #1:
+  Email: admin@smartai.local
+  Username: admin
+  Role: admin
+  Created: {'__dt__': '2026-02-15T11:08:11.905515'}
+  Has Password Hash: Yes
+
+============================================================

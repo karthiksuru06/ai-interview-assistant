@@ -1,0 +1,35 @@
+SERVER STATUS CHECK
+============================================================
+
+Checking root endpoint /
+------------------------------------------------------------
+Status: 200
+Response: {"message":"Smart AI Interview Assistant API is running","docs":"/docs"}
+
+Checking /openapi.json
+------------------------------------------------------------
+Status: 200
+
+Registered paths:
+  /
+  /admin/stats
+  /admin/users
+  /auth/login
+  /auth/reset-password
+  /auth/security-question
+  /auth/signup
+  /health
+  /health/gpu
+  /health/inference
+  /history/save
+  /history/user/{user_id}
+  /interview/analyze_frame
+  /interview/next_question
+  /interview/session/{session_id}
+  /interview/session/{session_id}/end
+  /interview/start_session
+  /interview/submit_answer
+  /interview/transcribe
+  /multimodal/session/{session_id}/summary
+
+============================================================

@@ -1,0 +1,20 @@
+
+[1] Inference Service
+[INFERENCE] Running on CPU (GPU not available)
+Status: {'model_loaded': False, 'device': 'cpu', 'model_architecture': 'efficientnet_b0', 'warm': False, 'total_inferences': 0, 'avg_inference_time_ms': 0.0}
+Model File: MISSING at ./models/best_model.pth
+
+[2] Gemini Service
+Gemini Library Available: True
+API Key Configured: Yes
+[GEMINI] Configured with model: gemini-1.5-flash
+Attempting generation...
+[GEMINI] Question generation error: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+Question Type: behavioral
+Question Text: Tell me about yourself and why you're interested i...
+Result: LIKELY REAL (API access successful)
+
+[3] Audio Service
+[AUDIO] Service initialized (sample_rate=16000)
+Status: {'sample_rate': 16000, 'asr_available': False, 'total_chunks_processed': 0, 'avg_processing_time_ms': 0}
+Result: DISABLED (Whisper Missing)

@@ -1,0 +1,30 @@
+API AUTHENTICATION TEST REPORT
+============================================================
+
+TEST 1: Admin Login
+------------------------------------------------------------
+Status Code: 404
+Response Headers: {'date': 'Sun, 15 Feb 2026 12:01:07 GMT', 'server': 'uvicorn', 'content-length': '22', 'content-type': 'application/json'}
+Response Body: {"detail":"Not Found"}
+
+RESULT: FAILED
+
+============================================================
+
+TEST 2: New User Signup
+------------------------------------------------------------
+Status Code: 404
+Response Body: {"detail":"Not Found"}
+
+RESULT: FAILED
+
+============================================================
+
+TEST 3: New User Login
+------------------------------------------------------------
+Status Code: 404
+Response Body: {"detail":"Not Found"}
+
+RESULT: FAILED
+
+============================================================
