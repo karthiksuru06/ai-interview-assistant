@@ -593,7 +593,7 @@ export default function InterviewSession() {
       const jwt = localStorage.getItem("token") || "";
       ws = new WebSocket(`${base}/interview/ws/${sessionId}?token=${encodeURIComponent(jwt)}`);
       wsRef.current = ws;
-      ws.onopen = () => 
+      ws.onopen = () => {};
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data);
