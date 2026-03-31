@@ -178,8 +178,17 @@ function EndSessionSummary({ sessionData, feedbacks, scores, elapsedSec, questio
       <div className="max-w-3xl mx-auto px-6 py-10">
         <motion.div initial={{y:-20,opacity:0}} animate={{y:0,opacity:1}} className="text-center mb-8"><Award className="w-12 h-12 text-cyan-400 mx-auto mb-3" /><h1 className="text-3xl font-bold text-white mb-1">Session Complete</h1><p className="text-gray-400 text-sm">Here's how you performed</p></motion.div>
         <motion.div initial={{scale:0.8,opacity:0}} animate={{scale:1,opacity:1}} transition={{delay:0.2,type:"spring"}} className="text-center mb-8 p-8 rounded-2xl bg-gray-900/80 border border-cyan-500/20">
-          <div className="text-6xl font-extrabold text-white mb-2">{anim<10?"0"+anim:anim}<span className="text-2xl text-gray-500">/10</span></div>
-          <div className={`text-lg font-semibold ${rc}`}>{rating}</div>
+          {scores.length > 0 ? (
+            <>
+              <div className="text-6xl font-extrabold text-white mb-2">{anim<10?"0"+anim:anim}<span className="text-2xl text-gray-500">/10</span></div>
+              <div className={`text-lg font-semibold ${rc}`}>{rating}</div>
+            </>
+          ) : (
+            <div className="py-2">
+              <div className="text-3xl font-extrabold text-cyan-400 mb-2">Incomplete Session</div>
+              <div className="text-sm text-gray-400">Answer more questions to receive a performance score.</div>
+            </div>
+          )}
         </motion.div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
           {[{l:"Duration",v:fmt(elapsedSec),i:Clock},{l:"Questions",v:questionCount,i:Target},{l:"Avg Score",v:`${avg}/10`,i:TrendingUp},{l:"Rating",v:rating,i:Award}].map((s,i)=>(
@@ -699,7 +708,7 @@ export default function InterviewSession() {
 
   useEffect(() => {
     if (multiFaceViolation && phase !== "ended") {
-      alert("SECURITY VIOLATION: Multiple faces detected! Terminating session.");
+      alert("SECURITY ALERT: Multiple individuals detected in local environment. This is a violation of the interview protocol. Session is being terminated immediately for integrity.");
       // Ensure immediate clean up
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
       if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.close();
@@ -883,11 +892,11 @@ export default function InterviewSession() {
           <div className="bg-black/40 backdrop-blur-md border border-cyan-500/20 rounded-xl p-4">
             <h3 className="text-[11px] text-cyan-400/80 uppercase tracking-widest mb-3 flex items-center gap-2"><Activity className="w-3.5 h-3.5"/>Real-Time Analytics</h3>
             <div className="flex justify-around mb-3">
-              <RadialGauge label="Confidence" value={faceReady ? Math.max(0, confidence * 100 + jitter) : 0} icon={Brain} color="cyan" size={72} />
+              <RadialGauge label="Confidence" value={faceReady ? Math.max(0, confidence * 100 + jitter) : 0} icon={Brain} color="cyan" size={64} />
               <RadialGauge label="Eye Contact" value={!faceReady || eyeContact==="Scanning..." || eyeContact==="Camera Off" || eyeContact==="No Face" ? 0 : Math.max(15, (1 - Math.abs(rawGazeRatio - 0.5) * 2) * 100) + jitter} icon={Eye}
-                color={!faceReady || eyeContact==="Scanning..." || eyeContact==="Camera Off" || eyeContact==="No Face" ? "red" : eyeContact==="Center" ? "green" : eyeContact==="Distracted" ? "red" : "yellow"} size={72} />
+                color={!faceReady || eyeContact==="Scanning..." || eyeContact==="Camera Off" || eyeContact==="No Face" ? "red" : eyeContact==="Center" ? "green" : eyeContact==="Distracted" ? "red" : "yellow"} size={64} />
               <RadialGauge label="Posture" value={!faceReady || !rawHeadPose || posture==="Scanning..." || posture==="Camera Off" || posture==="No Face" ? 0 : Math.max(10, (1 - (Math.abs(rawHeadPose.pitch) / 45 + Math.abs(rawHeadPose.yaw) / 55)) * 100) + jitter} icon={Activity}
-                color={!faceReady || !rawHeadPose || posture==="Scanning..." || posture==="Camera Off" || posture==="No Face" ? "red" : posture==="Good" ? "green" : "yellow"} size={72} />
+                color={!faceReady || !rawHeadPose || posture==="Scanning..." || posture==="Camera Off" || posture==="No Face" ? "red" : posture==="Good" ? "green" : "yellow"} size={64} />
             </div>
             <div className="flex items-center justify-between text-[11px] px-1">
               <span className="text-cyan-400/80">Emotion</span>
