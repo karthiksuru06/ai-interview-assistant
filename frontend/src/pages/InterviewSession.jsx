@@ -164,10 +164,10 @@ function generateSessionPDF({ sessionId, subject, difficulty, duration, question
 // ── End Session Summary ──────────────────────────────────────────
 function EndSessionSummary({ sessionData, feedbacks, scores, elapsedSec, questionCount, subject, difficulty, sessionId, onDownloadPDF, onViewHistory, onNewSession }) {
   const [anim, setAnim] = useState(0);
-  const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : 0;
-  useEffect(() => { const t=parseFloat(avg); if(!t) return; const s=t/30; let c=0; const iv=setInterval(()=>{ c+=s; if(c>=t){c=t;clearInterval(iv);} setAnim(parseFloat(c.toFixed(1))); },50); return ()=>clearInterval(iv); },[avg]);
+  const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : "—";
+  useEffect(() => { const t=parseFloat(avg); if(isNaN(t)) return; const s=t/30; let c=0; const iv=setInterval(()=>{ c+=s; if(c>=t){c=t;clearInterval(iv);} setAnim(parseFloat(c.toFixed(1))); },50); return ()=>clearInterval(iv); },[avg]);
   const fmt = s => `${Math.floor(s/60)}m ${s%60}s`;
-  const rating = sessionData?.performance_rating || (parseFloat(avg)>=8?"Excellent":parseFloat(avg)>=6?"Good":parseFloat(avg)>=4?"Average":"Needs Improvement");
+  const rating = sessionData?.performance_rating || (scores.length ? (parseFloat(avg)>=8?"Excellent":parseFloat(avg)>=6?"Good":parseFloat(avg)>=4?"Average":"Needs Improvement") : "Not Scored");
   const rc = rating==="Excellent"?"text-green-400":rating==="Good"?"text-cyan-400":rating==="Average"?"text-yellow-400":"text-red-400";
   const strengths = [...new Set(feedbacks.flatMap(f=>f.strengths||[]))].slice(0,5);
   const improvements = [...new Set(feedbacks.flatMap(f=>f.improvements||[]))].slice(0,5);
@@ -178,7 +178,7 @@ function EndSessionSummary({ sessionData, feedbacks, scores, elapsedSec, questio
       <div className="max-w-3xl mx-auto px-6 py-10">
         <motion.div initial={{y:-20,opacity:0}} animate={{y:0,opacity:1}} className="text-center mb-8"><Award className="w-12 h-12 text-cyan-400 mx-auto mb-3" /><h1 className="text-3xl font-bold text-white mb-1">Session Complete</h1><p className="text-gray-400 text-sm">Here's how you performed</p></motion.div>
         <motion.div initial={{scale:0.8,opacity:0}} animate={{scale:1,opacity:1}} transition={{delay:0.2,type:"spring"}} className="text-center mb-8 p-8 rounded-2xl bg-gray-900/80 border border-cyan-500/20">
-          <div className="text-6xl font-extrabold text-white mb-2">{anim}<span className="text-2xl text-gray-500">/10</span></div>
+          <div className="text-6xl font-extrabold text-white mb-2">{anim<10?"0"+anim:anim}<span className="text-2xl text-gray-500">/10</span></div>
           <div className={`text-lg font-semibold ${rc}`}>{rating}</div>
         </motion.div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
@@ -190,9 +190,9 @@ function EndSessionSummary({ sessionData, feedbacks, scores, elapsedSec, questio
           {pie.length>0&&(<div className="p-5 rounded-xl bg-gray-900/60 border border-white/5"><h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2"><BarChart3 className="w-4 h-4 text-cyan-400"/>Emotion Breakdown</h3><ResponsiveContainer width="100%" height={180}><PieChart><Pie data={pie} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" paddingAngle={3} stroke="none">{pie.map((_,i)=><Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</Pie><Tooltip contentStyle={{background:"#111",border:"1px solid #333",borderRadius:8,fontSize:12}}/></PieChart></ResponsiveContainer></div>)}
           <div className="p-5 rounded-xl bg-gray-900/60 border border-white/5">
             <h3 className="text-sm font-semibold text-green-400 mb-2 flex items-center gap-2"><CheckCircle2 className="w-4 h-4"/>Strengths</h3>
-            {strengths.length?strengths.map((s,i)=><p key={i} className="text-xs text-gray-300 mb-1">&bull; {s}</p>):<p className="text-xs text-gray-500 italic">No data</p>}
+            {strengths.length?strengths.map((s,i)=><p key={i} className="text-xs text-gray-300 mb-1">&bull; {s}</p>):<p className="text-xs text-green-400/40 italic">Continue practicing to identify specific professional strengths</p>}
             <h3 className="text-sm font-semibold text-orange-400 mt-4 mb-2 flex items-center gap-2"><AlertCircle className="w-4 h-4"/>Areas to Improve</h3>
-            {improvements.length?improvements.map((s,i)=><p key={i} className="text-xs text-gray-300 mb-1">&bull; {s}</p>):<p className="text-xs text-gray-500 italic">No data</p>}
+            {improvements.length?improvements.map((s,i)=><p key={i} className="text-xs text-gray-300 mb-1">&bull; {s}</p>):<p className="text-xs text-orange-400/40 italic">Review previous answers to uncover areas for improvement</p>}
           </div>
         </div>
         {recs.length>0&&(<div className="p-5 rounded-xl bg-gray-900/60 border border-white/5 mb-8"><h3 className="text-sm font-semibold text-cyan-400 mb-3 flex items-center gap-2"><Brain className="w-4 h-4"/>AI Recommendations</h3>{recs.map((r,i)=><div key={i} className="flex gap-3 items-start mb-2"><span className="text-xs text-cyan-400/80 font-bold">{i+1}.</span><p className="text-xs text-gray-300 leading-relaxed">{r}</p></div>)}</div>)}
@@ -275,7 +275,7 @@ export default function InterviewSession() {
     const behavioralBonus = (confScore + eyeScore + postScore) / 3; // 0–1
     // Final: 70% API answer quality + 30% behavioral presence (scaled to 10)
     const blended = apiAvg * 0.7 + behavioralBonus * 10 * 0.3;
-    return Math.min(10, blended).toFixed(0);
+    return Math.max(1, blended).toFixed(0);
   })();
   const [jitter, setJitter] = useState(0);
   useEffect(() => { const i = setInterval(() => setJitter((Math.random()-0.5)*1.2), 200); return () => clearInterval(i); }, []);
@@ -699,10 +699,13 @@ export default function InterviewSession() {
 
   useEffect(() => {
     if (multiFaceViolation && phase !== "ended") {
-      alert("Security Violation: Multiple faces detected! Terminating session.");
-      handleEndSession();
+      alert("SECURITY VIOLATION: Multiple faces detected! Terminating session.");
+      // Ensure immediate clean up
+      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+      if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.close();
+      navigate("/dashboard");
     }
-  }, [multiFaceViolation, phase, handleEndSession]);
+  }, [multiFaceViolation, phase, handleEndSession, navigate]);
 
   const handleDownloadPDF = useCallback(() => {
     const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : "0";
@@ -908,8 +911,8 @@ export default function InterviewSession() {
 
             {phase==="asking"&&(
               <>
-                <textarea value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Type your answer here..." rows={5}
-                  className="w-full p-3 rounded-lg bg-gray-900/80 border border-cyan-500/20 focus:border-cyan-500/50 text-sm text-white placeholder-gray-600 resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 font-sans mb-3" />
+                <textarea value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Type your answer here..." rows={4}
+                  className="w-full p-2.5 rounded-lg bg-gray-900/60 border border-cyan-500/20 focus:border-cyan-500/50 text-xs text-white placeholder-gray-600 resize-none focus:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500 font-sans mb-2" />
                 <button onClick={submitAnswer} disabled={!answer.trim()}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-500 text-black text-sm font-bold disabled:opacity-30 disabled:cursor-not-allowed hover:from-cyan-500 hover:to-cyan-400 transition-all shadow-[0_0_20px_rgba(0,240,255,0.2)]">
                   <Send className="w-4 h-4"/> Submit Answer
@@ -935,34 +938,36 @@ export default function InterviewSession() {
                 </div>
                 <p className="text-xs text-gray-300 font-sans leading-relaxed">{feedback.feedback}</p>
                 {feedback.golden_answer&&(<div className="p-3 rounded-lg bg-cyan-900/10 border border-cyan-500/20"><div className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider mb-1">Model Answer</div><p className="text-xs text-gray-300 font-sans leading-relaxed">{feedback.golden_answer}</p></div>)}
-                {feedback.strengths?.length>0&&(<div>{feedback.strengths.map((s,i)=><span key={i} className="inline-block mr-1.5 mb-1 px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-[10px]">{s}</span>)}</div>)}
-                {feedback.improvements?.length>0&&(<div>{feedback.improvements.map((s,i)=><span key={i} className="inline-block mr-1.5 mb-1 px-2 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10px]">{s}</span>)}</div>)}
+                {feedback.strengths?.length>0&&(<div>{feedback.strengths.slice(0,2).map((s,i)=><span key={i} className="inline-block mr-1 mb-1 px-1.5 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-[9px]">{s}</span>)}</div>)}
+                {feedback.improvements?.length>0&&(<div>{feedback.improvements.slice(0,2).map((s,i)=><span key={i} className="inline-block mr-1 mb-1 px-1.5 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[9px]">{s}</span>)}</div>)}
               </motion.div>
             )}
           </div>
 
           {/* Transcript */}
-          <div className="bg-black/40 backdrop-blur-md border border-cyan-500/20 rounded-xl p-3 max-h-40 overflow-y-auto">
-            <div className="text-[9px] text-cyan-400/70 uppercase tracking-widest mb-2">Live Transcript</div>
-            {transcript.length===0&&<p className="text-cyan-400/30 text-center py-2 text-xs font-sans">Transcript appears here...</p>}
+          <div className="bg-black/40 backdrop-blur-md border border-cyan-500/20 rounded-xl p-2.5 max-h-32 overflow-y-auto">
+            <div className="text-[9px] text-cyan-400/50 uppercase tracking-widest mb-1.5">Live Transcript</div>
+            {transcript.length===0&&<p className="text-cyan-400/20 text-center py-1 text-[10px] font-sans">Awaiting dialogue...</p>}
             {transcript.map((e,i)=>(
-              <div key={i} className={`p-1.5 mb-1 rounded border-l-2 text-[11px] ${e.type==="question"?"bg-cyan-900/10 border-cyan-500":e.type==="answer"?"bg-purple-900/10 border-purple-500":"bg-green-900/10 border-green-500"}`}>
-                <span className={`text-[8px] uppercase tracking-widest font-bold ${e.type==="question"?"text-cyan-500":e.type==="answer"?"text-purple-400":"text-green-400"}`}>{e.type==="question"?`Q${e.num}`:e.type==="answer"?"You":"AI"}</span>
-                <p className="text-gray-300 mt-0.5 font-sans leading-snug">{e.text.length>120?e.text.substring(0,120)+"...":e.text}</p>
+              <div key={i} className={`p-1 mb-1 rounded border-l-2 text-[10px] ${e.type==="question"?"bg-cyan-900/10 border-cyan-500":e.type==="answer"?"bg-purple-900/10 border-purple-500":"bg-green-900/10 border-green-500"}`}>
+                <span className={`text-[7px] uppercase tracking-widest font-bold ${e.type==="question"?"text-cyan-500":e.type==="answer"?"text-purple-400":"text-green-400"}`}>{e.type==="question"?`Q${e.num}`:e.type==="answer"?"You":"AI"}</span>
+                <p className="text-gray-300 mt-0.5 font-sans leading-snug">{e.text.length>100?e.text.substring(0,100)+"...":e.text}</p>
               </div>
             ))}
             <div ref={transcriptEndRef}/>
           </div>
 
           {/* Action Buttons */}
-          <button onClick={fetchNextQuestion} disabled={isEnding||phase==="loading"||phase==="evaluating"}
-            className="w-full py-3 bg-cyan-900/30 border border-cyan-500/30 hover:border-cyan-500 text-cyan-200 uppercase tracking-widest font-bold text-sm transition-all hover:shadow-[0_0_15px_rgba(6,182,212,0.2)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 rounded-lg">
-            <ArrowRight className="w-4 h-4"/> Next Question
-          </button>
-          <button onClick={()=>setShowEndConfirm(true)} disabled={isEnding}
-            className="w-full py-3 bg-gradient-to-r from-red-900/50 to-red-800/50 border border-red-500/50 hover:border-red-500 text-red-200 uppercase tracking-widest font-bold text-sm transition-all hover:shadow-[0_0_20px_rgba(220,38,38,0.3)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 rounded-lg">
-            <StopCircle className="w-4 h-4"/> {isEnding?"Ending...":"End Session"}
-          </button>
+          <div className="flex flex-col gap-2">
+            <button onClick={fetchNextQuestion} disabled={isEnding||phase==="loading"||phase==="evaluating"}
+              className="w-full py-2.5 bg-cyan-900/20 border border-cyan-500/20 hover:border-cyan-500 text-cyan-200 uppercase tracking-widest font-bold text-xs transition-all hover:shadow-[0_0_15px_rgba(6,182,212,0.2)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 rounded-lg">
+              <ArrowRight className="w-3.5 h-3.5"/> Next Question
+            </button>
+            <button onClick={()=>setShowEndConfirm(true)} disabled={isEnding}
+              className="w-full py-2.5 bg-gradient-to-r from-red-900/40 to-red-800/40 border border-red-500/40 hover:border-red-500 text-red-200 uppercase tracking-widest font-bold text-xs transition-all hover:shadow-[0_0_20px_rgba(220,38,38,0.2)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 rounded-lg">
+              <StopCircle className="w-3.5 h-3.5"/> {isEnding?"Ending...":"End Session"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
