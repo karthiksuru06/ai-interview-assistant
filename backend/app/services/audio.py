@@ -17,6 +17,9 @@ import threading
 import numpy as np
 
 from app.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AudioMetrics:
@@ -487,7 +490,7 @@ class AudioService:
         self._asr_model = None
         self._asr_available = False
 
-        print(f"[AUDIO] Service initialized (sample_rate={sample_rate})")
+        logger.info(f"[AUDIO] Service initialized (sample_rate={sample_rate})")
 
         # Clean up orphaned temp files from previous crashes
         self._cleanup_stale_temp_files()
@@ -515,14 +518,13 @@ class AudioService:
             import whisper
             self._asr_model = whisper.load_model("small")
             self._asr_available = True
-            print("[AUDIO] Whisper ASR model loaded")
+            logger.info("[AUDIO] Whisper ASR model loaded")
             return True
         except ImportError:
-            print("[AUDIO] Whisper not installed - transcription disabled")
-            print("[AUDIO] Install with: pip install openai-whisper")
+            logger.warning("[AUDIO] Whisper not installed - transcription disabled. Install with: pip install openai-whisper")
             return False
         except Exception as e:
-            print(f"[AUDIO] Failed to load Whisper: {e}")
+            logger.error(f"[AUDIO] Failed to load Whisper: {e}")
             return False
 
     def decode_base64_audio(self, base64_string: str) -> np.ndarray:
@@ -678,7 +680,7 @@ class AudioService:
         import shutil
         cls._ffmpeg_available = shutil.which("ffmpeg") is not None
         if not cls._ffmpeg_available:
-            print(
+            logger.warning(
                 "[AUDIO] WARNING: ffmpeg not found on PATH. "
                 "WebM audio decoding and clarity analysis will be disabled. "
                 "Install ffmpeg: https://ffmpeg.org/download.html"
@@ -718,7 +720,7 @@ class AudioService:
             )
 
             if result.returncode != 0:
-                print(f"[AUDIO] ffmpeg failed: {result.stderr.decode()[:200]}")
+                logger.error(f"[AUDIO] ffmpeg failed: {result.stderr.decode()[:200]}")
                 return None
 
             if os.path.exists(tmp_out):
@@ -729,11 +731,11 @@ class AudioService:
                     return audio
             return None
         except FileNotFoundError:
-            print("[AUDIO] ffmpeg not found — install it for WebM audio support")
+            logger.warning("[AUDIO] ffmpeg not found — install it for WebM audio support")
             self.__class__._ffmpeg_available = False
             return None
         except Exception as e:
-            print(f"[AUDIO] WebM→PCM decode failed: {e}")
+            logger.error(f"[AUDIO] WebM→PCM decode failed: {e}")
             return None
         finally:
             for p in (tmp_in, tmp_out):
@@ -769,7 +771,7 @@ class AudioService:
             text = result.get('text', '').strip()
             return text if text else None
         except Exception as e:
-            print(f"[AUDIO] File-based transcription error: {e}")
+            logger.error(f"[AUDIO] File-based transcription error: {e}")
             return None
         finally:
             try:

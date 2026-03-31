@@ -20,6 +20,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from app.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -86,10 +89,10 @@ class MFCCExtractor:
             ).to(self.device)
 
             self.use_torchaudio = True
-            print(f"[MFCC] Using torchaudio on {self.device}")
+            logger.info(f"[MFCC] Using torchaudio on {self.device}")
 
         except ImportError:
-            print("[MFCC] torchaudio not available, using librosa")
+            logger.warning("[MFCC] torchaudio not available, using librosa")
             import librosa
             self.librosa = librosa
 
@@ -274,11 +277,11 @@ class AudioInferenceService:
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
             gpu_name = torch.cuda.get_device_name(0)
-            print(f"[AUDIO INFERENCE] GPU: {gpu_name}")
+            logger.info(f"[AUDIO INFERENCE] GPU: {gpu_name}")
             torch.backends.cudnn.benchmark = True
         else:
             self.device = torch.device("cpu")
-            print("[AUDIO INFERENCE] Running on CPU")
+            logger.info("[AUDIO INFERENCE] Running on CPU")
 
     def load_model(self, model_path: Optional[str] = None) -> bool:
         """
@@ -293,7 +296,7 @@ class AudioInferenceService:
         path = model_path or getattr(settings, 'audio_model_path', './checkpoints/audio_best.pth')
 
         try:
-            print(f"[AUDIO INFERENCE] Loading model from: {path}")
+            logger.info(f"[AUDIO INFERENCE] Loading model from: {path}")
 
             checkpoint = torch.load(path, map_location=self.device)
 
@@ -321,16 +324,16 @@ class AudioInferenceService:
             if self.device.type == "cuda":
                 self.model = torch.jit.script(self.model)
 
-            print(f"[AUDIO INFERENCE] Model loaded (epoch {checkpoint.get('epoch', '?')})")
-            print(f"[AUDIO INFERENCE] Val accuracy: {checkpoint.get('val_acc', 0):.4f}")
+            logger.info(f"[AUDIO INFERENCE] Model loaded (epoch {checkpoint.get('epoch', '?')})")
+            logger.info(f"[AUDIO INFERENCE] Val accuracy: {checkpoint.get('val_acc', 0):.4f}")
 
             return True
 
         except FileNotFoundError:
-            print(f"[AUDIO INFERENCE] Model not found: {path}")
+            logger.warning(f"[AUDIO INFERENCE] Model not found: {path}")
             return False
         except Exception as e:
-            print(f"[AUDIO INFERENCE] Error loading model: {e}")
+            logger.error(f"[AUDIO INFERENCE] Error loading model: {e}")
             return False
 
     def preprocess_audio(self, audio_bytes: bytes) -> np.ndarray:
@@ -497,7 +500,7 @@ class AudioInferenceService:
         dummy_audio = np.random.randn(16000).astype(np.float32) * 0.1
         self.predict(dummy_audio)
         self.emotion_history.clear()
-        print("[AUDIO INFERENCE] Model warmed up")
+        logger.info("[AUDIO INFERENCE] Model warmed up")
 
     def get_status(self) -> Dict:
         """Get service status."""

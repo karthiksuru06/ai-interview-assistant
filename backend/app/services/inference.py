@@ -141,7 +141,7 @@ class MediaPipeAnalyzer:
     def __init__(self):
         if not MEDIAPIPE_AVAILABLE:
             self.face_mesh = None
-            print("[MEDIAPIPE] Not installed — posture/gaze analysis disabled")
+            logger.warning("[MEDIAPIPE] Not installed — posture/gaze analysis disabled")
             return
 
         try:
@@ -152,10 +152,10 @@ class MediaPipeAnalyzer:
                 min_detection_confidence=0.6,
                 min_tracking_confidence=0.55,
             )
-            print("[MEDIAPIPE] Face Mesh initialised (478 landmarks, iris tracking ON)")
+            logger.info("[MEDIAPIPE] Face Mesh initialised (478 landmarks, iris tracking ON)")
         except (AttributeError, Exception) as e:
             self.face_mesh = None
-            print(f"[MEDIAPIPE] Initialization failed: {e}. Posture analysis disabled.")
+            logger.error(f"[MEDIAPIPE] Initialization failed: {e}. Posture analysis disabled.")
 
         # Temporal gaze-distraction state
         self._gaze_off_start: Optional[float] = None
@@ -453,9 +453,9 @@ class InferenceService:
         if FER_LIBRARY_AVAILABLE:
             try:
                 self.fer_library_service = get_fer_service()
-                print("[INFERENCE] FER-library service available")
+                logger.info("[INFERENCE] FER-library service available")
             except Exception as e:
-                print(f"[INFERENCE] FER-library init failed: {e}")
+                logger.error(f"[INFERENCE] FER-library init failed: {e}")
 
         # Blendshape-based FER fallback
         self.blendshape_fer: Optional[BlendshapeFER] = None
@@ -475,15 +475,15 @@ class InferenceService:
             self.device = torch.device("cuda")
             gpu_name = torch.cuda.get_device_name(0)
             vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            print(f"[INFERENCE] GPU detected: {gpu_name} ({vram:.1f} GB)")
-            print(f"[INFERENCE] CUDA version: {torch.version.cuda}")
+            logger.info(f"[INFERENCE] GPU detected: {gpu_name} ({vram:.1f} GB)")
+            logger.info(f"[INFERENCE] CUDA version: {torch.version.cuda}")
 
             # Enable optimizations
             torch.backends.cudnn.benchmark = True
 
         else:
             self.device = torch.device("cpu")
-            print("[INFERENCE] Running on CPU (GPU not available)")
+            logger.info("[INFERENCE] Running on CPU (GPU not available)")
 
     def _setup_transform(self) -> None:
         """Setup image preprocessing pipeline."""
@@ -509,7 +509,7 @@ class InferenceService:
         path = model_path or settings.fer_model_path
 
         try:
-            print(f"[INFERENCE] Loading model from: {path}")
+            logger.info(f"[INFERENCE] Loading model from: {path}")
 
             # Create model architecture
             self.model = FERModel(
@@ -524,8 +524,8 @@ class InferenceService:
             if isinstance(checkpoint, dict):
                 if "model_state_dict" in checkpoint:
                     self.model.load_state_dict(checkpoint["model_state_dict"])
-                    print(f"[INFERENCE] Loaded from epoch {checkpoint.get('epoch', '?')}")
-                    print(f"[INFERENCE] Val accuracy: {checkpoint.get('val_acc', '?')}")
+                    logger.info(f"[INFERENCE] Loaded from epoch {checkpoint.get('epoch', '?')}")
+                    logger.info(f"[INFERENCE] Val accuracy: {checkpoint.get('val_acc', '?')}")
                 else:
                     self.model.load_state_dict(checkpoint)
             else:
@@ -535,14 +535,14 @@ class InferenceService:
             self.model = self.model.to(self.device)
             self.model.eval()
 
-            print(f"[INFERENCE] Model loaded successfully on {self.device}")
+            logger.info(f"[INFERENCE] Model loaded successfully on {self.device}")
             return True
 
         except FileNotFoundError:
-            print(f"[INFERENCE] Model file not found: {path}")
+            logger.warning(f"[INFERENCE] Model file not found: {path}")
             return False
         except Exception as e:
-            print(f"[INFERENCE] Error loading model: {e}")
+            logger.error(f"[INFERENCE] Error loading model: {e}")
             return False
 
     def _preprocess_image(self, image: np.ndarray) -> torch.Tensor:

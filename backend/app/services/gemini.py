@@ -47,9 +47,9 @@ class GeminiService:
             genai.configure(api_key=settings.gemini_api_key)
             self.model = genai.GenerativeModel(settings.gemini_model)
             self.is_configured = True
-            print(f"[GEMINI] Configured with model: {settings.gemini_model}")
+            logger.info(f"[GEMINI] Configured with model: {settings.gemini_model}")
         except Exception as e:
-            print(f"[GEMINI] Configuration failed: {e}")
+            logger.error(f"[GEMINI] Configuration failed: {e}")
             self.is_configured = False
 
     async def generate_question(
