@@ -434,9 +434,20 @@ async def submit_answer(request: AnswerSubmit):
         questions[q_idx]["clarity_score"] = evaluation.get("clarity_score")
         questions[q_idx]["content_score"] = evaluation.get("content_score")
 
+        # Recalculate session-wide scores
+        all_scored = [q["ai_score"] for q in questions if q.get("ai_score") is not None]
+        new_overall = sum(all_scored) / len(all_scored) if all_scored else 0.0
+
         await db.sessions_collection.update_one(
             {"_id": request.session_id},
-            {"$set": {"questions": questions, "updated_at": datetime.utcnow()}},
+            {
+                "$set": {
+                    "questions": questions,
+                    "overall_score": round(new_overall, 2),
+                    "avg_confidence_score": round(new_overall, 2), # Using AI score as proxy for confidence here
+                    "updated_at": datetime.utcnow()
+                }
+            },
         )
 
         return AnswerFeedback(

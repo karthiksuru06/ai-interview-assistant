@@ -410,6 +410,17 @@ export default function Dashboard() {
             <BookOpen size={15} />
             Questions
           </button>
+          {user?.role === "admin" && (
+            <button
+              style={styles.navLink}
+              onClick={() => navigate("/admin")}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#fff"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "#9aa6b2"; }}
+            >
+              <Shield size={15} color="#ef4444" />
+              Admin Panel
+            </button>
+          )}
         </div>
 
         <div style={styles.userSection}>

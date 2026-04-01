@@ -13,7 +13,7 @@ import {
 import {
   Video, VideoOff, Activity, Cpu, Zap, Send, ChevronRight, User, Eye,
   Volume2, VolumeX, Brain, Sparkles, CheckCircle2, AlertCircle, StopCircle,
-  ArrowRight, Clock, Download, FileText, Award, Target, TrendingUp,
+  Mic, Square, ArrowRight, Clock, Download, FileText, Award, Target, TrendingUp,
   Shield, BarChart3,
 } from "lucide-react";
 
@@ -258,6 +258,9 @@ export default function InterviewSession() {
 
   const [streamReady, setStreamReady] = useState(false);
   const [faceReady, setFaceReady] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
 
   // ── Refs ──
   const videoRef = useRef(null);
@@ -272,6 +275,9 @@ export default function InterviewSession() {
   const isFetchingQuestionRef = useRef(false); // New: prevent duplicate fetches
   const canvasRef = useRef(null);
   const lastFrameTimeRef = useRef(0);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
 
   // ── Derived ──
   // Interview Average Score (Live Calculation — blends API score + behavioral metrics)
@@ -742,6 +748,72 @@ export default function InterviewSession() {
     generateSessionPDF({ sessionId, subject, difficulty, duration: formatTime(elapsedSec), questionCount, avgScore: avg, rating: sessionSummary?.performance_rating, dominantEmotion: sessionSummary?.dominant_emotion || emotion, feedbacks: allFeedbacks, recommendations: sessionSummary?.recommendations || [] });
   }, [sessionId, subject, difficulty, elapsedSec, questionCount, scores, sessionSummary, allFeedbacks, emotion]);
 
+  // ── Voice Answering logic ──
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        setIsTranscribing(true);
+        try {
+          // Convert blob to base64
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = async () => {
+             const base64Audio = reader.result.split(",")[1];
+             const res = await api.post("/interview/transcribe", { audio: base64Audio });
+             if (res.data?.success && res.data.transcript) {
+               setAnswer(prev => prev + (prev ? " " : "") + res.data.transcript.trim());
+             }
+             setIsTranscribing(false);
+          };
+        } catch (err) {
+          console.error("Transcription failed", err);
+          setIsTranscribing(false);
+        }
+        stream.getTracks().forEach(t => t.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      // Auto-stop after 30 seconds
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => {
+          if (prev >= 29) {
+            stopRecording();
+            return 30;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+
+    } catch (err) {
+      console.error("Mic access denied", err);
+      alert("Microphone access is required for voice answering.");
+    }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  }, []);
+
   // ── Style Helpers ──
   const emotionColors = { happiness:"text-green-400", neutral:"text-cyan-400", surprise:"text-yellow-400", sadness:"text-indigo-400", anger:"text-red-400", fear:"text-orange-400", disgust:"text-rose-400", contempt:"text-gray-400" };
   const getEmotionColor = e => e === "none" ? "text-gray-500 animate-pulse" : emotionColors[e] || "text-cyan-400";
@@ -941,9 +1013,29 @@ export default function InterviewSession() {
 
             {phase==="asking"&&(
               <>
-                <textarea value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Type your answer here..." rows={4}
-                  className="w-full p-2.5 rounded-lg bg-gray-900/60 border border-cyan-500/20 focus:border-cyan-500/50 text-xs text-white placeholder-gray-600 resize-none focus:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500 font-sans mb-2" />
-                <button onClick={submitAnswer} disabled={!answer.trim()}
+                <div className="relative mb-2">
+                  <textarea 
+                    value={answer} 
+                    onChange={e=>setAnswer(e.target.value)} 
+                    placeholder={isRecording ? "Recording..." : "Type or speak your answer..."} 
+                    rows={4}
+                    className="w-full p-2.5 pr-10 rounded-lg bg-gray-900/60 border border-cyan-500/20 focus:border-cyan-500/50 text-xs text-white placeholder-gray-600 resize-none focus:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500 font-sans" 
+                  />
+                  <div className="absolute right-2 bottom-2 flex flex-col items-center gap-1.5">
+                    {isRecording && (
+                      <span className="text-[9px] text-red-500 font-bold animate-pulse">{30 - recordingTime}s</span>
+                    )}
+                    <button 
+                      onClick={isRecording ? stopRecording : startRecording}
+                      disabled={isTranscribing}
+                      title={isRecording ? "Stop Recording" : "Voice Answering"}
+                      className={`p-2 rounded-lg transition-all ${isRecording ? "bg-red-500/20 text-red-400 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.3)]" : "bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20"}`}
+                    >
+                      {isTranscribing ? <div className="w-3.5 h-3.5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" /> : (isRecording ? <Square className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />)}
+                    </button>
+                  </div>
+                </div>
+                <button onClick={submitAnswer} disabled={!answer.trim() || isRecording || isTranscribing}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-500 text-black text-sm font-bold disabled:opacity-30 disabled:cursor-not-allowed hover:from-cyan-500 hover:to-cyan-400 transition-all shadow-[0_0_20px_rgba(0,240,255,0.2)]">
                   <Send className="w-4 h-4"/> Submit Answer
                 </button>
