@@ -95,8 +95,11 @@ class InterviewSession(BaseModel):
     """Schema for a completed interview session stored in the database."""
     user_id: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
     subject: str = "General"
     difficulty: str = "medium"
     overall_score: int = 0
     metrics: Dict[str, Any] = Field(default_factory=dict)
     transcript: List[Dict[str, Any]] = Field(default_factory=list)
+    questions: List[Dict[str, Any]] = Field(default_factory=list)
+    status: str = "completed"

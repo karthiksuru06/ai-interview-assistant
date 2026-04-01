@@ -55,9 +55,9 @@ async def get_user_history(user_id: str):
     from app.database import session_serializer
     valid_sessions = []
     for s in sessions:
-        # A session is valid if it's 'completed' OR has at least one question with a user response
+        # A session is valid if it's 'completed', 'in_progress', or has at least one question generated
         questions = s.get("questions", [])
-        if s.get("status") == "completed" or any(q.get("user_response") for q in questions):
+        if s.get("status") in ["completed", "in_progress"] or len(questions) > 0:
             valid_sessions.append(session_serializer(s))
 
     return valid_sessions

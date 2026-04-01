@@ -147,12 +147,12 @@ class MediaPipeAnalyzer:
         try:
             self.face_mesh = mp.solutions.face_mesh.FaceMesh(
                 static_image_mode=False,
-                max_num_faces=1,
+                max_num_faces=2,            # was 1 — need at least 2 to detect violations
                 refine_landmarks=True,      # enables 10 iris landmarks
                 min_detection_confidence=0.6,
                 min_tracking_confidence=0.55,
             )
-            logger.info("[MEDIAPIPE] Face Mesh initialised (478 landmarks, iris tracking ON)")
+            logger.info("[MEDIAPIPE] Face Mesh initialised (Max 2 faces, iris tracking ON)")
         except (AttributeError, Exception) as e:
             self.face_mesh = None
             logger.error(f"[MEDIAPIPE] Initialization failed: {e}. Posture analysis disabled.")
@@ -174,7 +174,8 @@ class MediaPipeAnalyzer:
                 "posture": "Good" | "Slouching" | "Looking Away" | "No Face",
                 "eye_contact": "Center" | "Left" | "Right" | "Distracted" | "No Face",
                 "head_pose": {"yaw": float, "pitch": float, "roll": float} | None,
-                "gaze_ratio": float   # 0.0=far-left  0.5=center  1.0=far-right
+                "gaze_ratio": float,   # 0.0=far-left  0.5=center  1.0=far-right
+                "multiple_faces": bool # TRUE if more than 1 face detected
             }
         """
         if self.face_mesh is None:
@@ -194,10 +195,19 @@ class MediaPipeAnalyzer:
             # Grace period expired — report no face
             self._gaze_off_start = None
             return {"posture": "No Face", "eye_contact": "No Face",
-                    "head_pose": None, "gaze_ratio": 0.5}
+                    "head_pose": None, "gaze_ratio": 0.5, "multiple_faces": False}
 
         # Face detected — reset grace timer
         self._no_face_start = None
+
+        # ── Security Check ───────────────────────────────────────
+        num_faces = len(results.multi_face_landmarks)
+        if num_faces > 1:
+            return {
+                "posture": "Good", "eye_contact": "Center",
+                "head_pose": None, "gaze_ratio": 0.5,
+                "multiple_faces": True,
+            }
 
         lm = results.multi_face_landmarks[0].landmark
 
@@ -405,7 +415,7 @@ class MediaPipeAnalyzer:
     @staticmethod
     def _default() -> Dict:
         return {"posture": "Unknown", "eye_contact": "Unknown",
-                "head_pose": None, "gaze_ratio": 0.5}
+                "head_pose": None, "gaze_ratio": 0.5, "multiple_faces": False}
 
 
 class InferenceService:

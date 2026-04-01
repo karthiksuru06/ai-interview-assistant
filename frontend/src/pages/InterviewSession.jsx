@@ -269,6 +269,7 @@ export default function InterviewSession() {
   const coachingTimerRef = useRef({});
   const transcriptEndRef = useRef(null);
   const initLockRef = useRef(false);
+  const isFetchingQuestionRef = useRef(false); // New: prevent duplicate fetches
   const canvasRef = useRef(null);
   const lastFrameTimeRef = useRef(0);
 
@@ -571,7 +572,11 @@ export default function InterviewSession() {
   }, []);
 
   // ── Auto-fetch first question ──
-  useEffect(() => { if (sessionId && phase === "idle") fetchNextQuestion(); }, [sessionId]);
+  useEffect(() => { 
+    if (sessionId && phase === "idle" && !isFetchingQuestionRef.current) { 
+      fetchNextQuestion(); 
+    } 
+  }, [sessionId, phase]);
 
   // ── TTS ──
   useEffect(() => {
@@ -621,7 +626,8 @@ export default function InterviewSession() {
 
   // ── Q&A Handlers ──
   const fetchNextQuestion = useCallback(async () => {
-    if (!sessionId) return;
+    if (!sessionId || isFetchingQuestionRef.current) return;
+    isFetchingQuestionRef.current = true;
     setPhase("loading"); setFeedback(null);
     try {
       const emotionCtx = {};
@@ -633,14 +639,24 @@ export default function InterviewSession() {
       } else { emotionCtx[emotion] = confidence; }
 
       const prev = phase === "feedback" ? null : (answer || null);
-      const res = await api.post("/interview/next_question", { session_id: sessionId, previous_answer: prev, emotion_context: emotionCtx }, { timeout: 30000 });
+      const res = await api.post("/interview/next_question", { 
+        session_id: sessionId, 
+        previous_answer: prev, 
+        emotion_context: emotionCtx 
+      }, { timeout: 30000 });
+      
       setCurrentQuestion(res.data);
       setQuestionCount(res.data.question_number);
       setAnswer("");
       setPhase("asking");
       setTranscript(prev => [...prev, { type: "question", text: res.data.question_text, num: res.data.question_number }]);
-    } catch (err) { console.error("[Q]", err); setPhase("asking"); }
-  }, [sessionId, answer, emotion, confidence, emotionHistory]);
+    } catch (err) { 
+      console.error("[Q]", err); 
+      setPhase("asking"); 
+    } finally {
+      isFetchingQuestionRef.current = false;
+    }
+  }, [sessionId, answer, emotion, confidence, emotionHistory, phase]);
 
   const submitAnswer = useCallback(async () => {
     if (!sessionId || !currentQuestion || !answer.trim()) return;
@@ -708,13 +724,18 @@ export default function InterviewSession() {
 
   useEffect(() => {
     if (multiFaceViolation && phase !== "ended") {
-      alert("SECURITY ALERT: Multiple individuals detected in local environment. This is a violation of the interview protocol. Session is being terminated immediately for integrity.");
+      console.error("[SECURITY] Multiple individuals detected. Terminating session.");
       // Ensure immediate clean up
-      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+      if (streamRef.current) { 
+        streamRef.current.getTracks().forEach(t => t.stop()); 
+        streamRef.current = null; 
+      }
       if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.close();
+      
+      alert("SECURITY ALERT: Multiple individuals detected in local environment. This is a violation of the interview protocol. Session is being terminated immediately for integrity.");
       navigate("/dashboard");
     }
-  }, [multiFaceViolation, phase, handleEndSession, navigate]);
+  }, [multiFaceViolation, phase, navigate]);
 
   const handleDownloadPDF = useCallback(() => {
     const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : "0";

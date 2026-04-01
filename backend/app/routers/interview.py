@@ -271,8 +271,39 @@ async def get_next_question(request: QuestionRequest):
     if not doc:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Save and evaluate previous answer if provided
+    # Prevent duplicate question generation from concurrent requests
+    # 1. Look for an existing, unanswered question asked within the last 10 seconds
     questions = doc.get("questions", [])
+    if questions and not request.previous_answer:
+        last_q = questions[-1]
+        if last_q.get("user_response") is None:
+            # Check if asked_at is very recent
+            asked_at_str = last_q.get("asked_at")
+            if asked_at_str:
+                try:
+                    # Handle ISO format with 'Z' for UTC
+                    iso_str = asked_at_str.replace("Z", "+00:00")
+                    asked_at = datetime.fromisoformat(iso_str)
+                    
+                    # We use UTC for everything
+                    now_utc = datetime.utcnow()
+                    # Ensure asked_at is offset-naive if now_utc is naive
+                    if asked_at.tzinfo is not None:
+                        asked_at = asked_at.replace(tzinfo=None)
+                        
+                    delta = (now_utc - asked_at).total_seconds()
+                    if delta < 10:  # 10s window to catch double-clicks
+                        logger.info(f"[INTERVIEW] Duplicate next_question detected. Returning existing Q{last_q['question_number']}")
+                        return QuestionResponse(
+                            question_number=last_q["question_number"],
+                            question_text=last_q["question_text"],
+                            question_type=last_q["question_type"],
+                            tips=last_q.get("tips"),
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to check duplicate question: {e}")
+
+    # Save and evaluate previous answer if provided
     if request.previous_answer and questions:
         q_idx = len(questions) - 1
         questions[q_idx]["user_response"] = request.previous_answer
@@ -364,59 +395,71 @@ async def submit_answer(request: AnswerSubmit):
     if not doc:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    questions = doc.get("questions", [])
     # Find the matching question
-    question = None
-    q_idx = None
-    for idx, q in enumerate(questions):
-        if q.get("question_number") == request.question_number:
-            question = q
-            q_idx = idx
-            break
+    q_idx = next((i for i, q in enumerate(questions) if q.get("question_number") == request.question_number), None)
 
-    if question is None:
+    if q_idx is None:
         raise HTTPException(status_code=404, detail="Question not found")
 
-    # ── Comparison: fetch previous session score ──
+    # 1. Commit the user response to DB immediately (Persistence First)
+    # This prevents data loss if evaluation fails/timeouts
+    questions[q_idx]["user_response"] = request.answer_text
+    questions[q_idx]["answered_at"] = datetime.utcnow().isoformat()
+    questions[q_idx]["response_duration_seconds"] = request.duration_seconds
+    
+    await db.sessions_collection.update_one(
+        {"_id": request.session_id},
+        {"$set": {"questions": questions, "updated_at": datetime.utcnow()}},
+    )
+
+    # 2. Evaluate with AI
     user_id = doc.get("user_id", "")
     previous_session = await _fetch_previous_session_score(user_id, request.session_id)
     scored_qs = [q for q in questions if q.get("ai_score") is not None]
     current_avg = (sum(q["ai_score"] for q in scored_qs) / len(scored_qs)) if scored_qs else 5.0
     comparison_text = _build_comparison_text(current_avg, previous_session)
 
-    gemini = get_gemini_service()
-    evaluation = await gemini.evaluate_answer(
-        question=question["question_text"],
-        answer=request.answer_text,
-        job_role=doc.get("job_role", "Software Engineer"),
-        comparison_text=comparison_text,
-    )
+    try:
+        gemini = get_gemini_service()
+        evaluation = await gemini.evaluate_answer(
+            question=questions[q_idx]["question_text"],
+            answer=request.answer_text,
+            job_role=doc.get("job_role", "Software Engineer"),
+            comparison_text=comparison_text,
+        )
 
-    # Update the question entry
-    questions[q_idx]["user_response"] = request.answer_text
-    questions[q_idx]["answered_at"] = datetime.utcnow().isoformat()
-    questions[q_idx]["response_duration_seconds"] = request.duration_seconds
-    questions[q_idx]["ai_feedback"] = evaluation["feedback"]
-    questions[q_idx]["ai_score"] = evaluation["score"]
-    questions[q_idx]["clarity_score"] = evaluation.get("clarity_score")
-    questions[q_idx]["content_score"] = evaluation.get("content_score")
+        # Update the question entry with feedback
+        questions[q_idx]["ai_feedback"] = evaluation["feedback"]
+        questions[q_idx]["ai_score"] = evaluation["score"]
+        questions[q_idx]["clarity_score"] = evaluation.get("clarity_score")
+        questions[q_idx]["content_score"] = evaluation.get("content_score")
 
-    await db.sessions_collection.update_one(
-        {"_id": request.session_id},
-        {"$set": {"questions": questions, "updated_at": datetime.utcnow()}},
-    )
+        await db.sessions_collection.update_one(
+            {"_id": request.session_id},
+            {"$set": {"questions": questions, "updated_at": datetime.utcnow()}},
+        )
 
-    return AnswerFeedback(
-        score=evaluation["score"],
-        clarity_score=evaluation.get("clarity_score"),
-        content_score=evaluation.get("content_score"),
-        feedback=evaluation["feedback"],
-        golden_answer=evaluation.get("golden_answer"),
-        comparison=evaluation.get("comparison"),
-        strengths=evaluation["strengths"],
-        improvements=evaluation["improvements"],
-        follow_up_suggested=evaluation["follow_up_suggested"],
-    )
+        return AnswerFeedback(
+            score=evaluation["score"],
+            clarity_score=evaluation.get("clarity_score"),
+            content_score=evaluation.get("content_score"),
+            feedback=evaluation["feedback"],
+            golden_answer=evaluation.get("golden_answer"),
+            comparison=evaluation.get("comparison"),
+            strengths=evaluation["strengths"],
+            improvements=evaluation["improvements"],
+            follow_up_suggested=evaluation["follow_up_suggested"],
+        )
+    except Exception as e:
+        logger.error(f"[INTERVIEW] Feedback generation failed: {e}")
+        # Return a partial response but at least we saved the answer text!
+        return AnswerFeedback(
+            score=5.0,
+            feedback="Your response was recorded, but AI evaluation is temporarily unavailable.",
+            strengths=[],
+            improvements=[],
+            follow_up_suggested=False
+        )
 
 
 # ============================================================================
@@ -790,6 +833,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, token: str =
                             "eye_contact": result.get("eye_contact", "Unknown"),
                             "head_pose": result.get("head_pose"),
                             "gaze_ratio": result.get("gaze_ratio"),
+                            "multiple_faces": result.get("multiple_faces", False),
                         },
                     })
                 else:
